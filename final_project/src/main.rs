@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet}; //main thing
+use std::collections::HashMap; //main thing for the structs
 use csv::ReaderBuilder;
 use serde::Deserialize;
 
@@ -36,11 +36,11 @@ struct Graph {
     //usuze is id (number)
     //meaning I can find a specific student if needed
     //node id is the student
-    //edge id is the adjacency HashSet for the student with teh given id
+    //edge id is weighted connection between two nodes, HashMap of that
 
     nodes: HashMap<usize, StudentRecord>,
-    //adjacency list (HashSet) to other students
-    edges: HashMap<usize, HashSet<usize>>,
+    //changed to a HashMap of a tuple of ids (usize), followed by a u32 (weight of connection)
+    edges: HashMap<(usize, usize), u32>,
 }
 
 impl Graph {
@@ -60,14 +60,24 @@ impl Graph {
     }
 
     //adds an edge
-    fn add_edge(&mut self, id1: usize, id2: usize) {
-        if let Some(neighbors) = self.edges.get_mut(&id1) {
-            neighbors.insert(id2);
-        }
-        if let Some(neighbors) = self.edges.get_mut(&id2) {
-            neighbors.inster(id1);
+    fn add_edge(&mut self, id1: usize, id2: usize, weight: u32) {
+        //added edge case detection of same id input
+        if id1 != id2 {
+            //makes the tuple
+            //use min/max to have a constant ordering of edge ids
+            let edge: (usize, usize) = (id1.min(id2), id1.max(id2));
+
+            //adds the edge (above) plus the weight (either combinding weights or just adding the weight)
+            self.edges.entry(edge).and_modify(|w: &mut u32| *w += weight).or_insert(weight);
         }
     }
+    //implement this later or something
+    /* 
+    fn print(&self, lines: usize) {
+        for x in 0..lines {
+            println!("Node {}");
+        }
+    } */
 }
 
 //take and heavily edited from my hw9 code but struicture is the same
@@ -99,13 +109,42 @@ fn read_csv(path: &str, graph: &mut Graph) -> Result<(), Box<dyn Error>> {
             let student1 = &graph.nodes[&ids[i]];
             let student2 = &graph.nodes[&ids[j]];
 
-            //since only testing school type, parental income levels, peer and self motivation, and and learning disabilities
-            //run an if each time
-            if 
+            let weight: u32 = calc_weight(student1, student2);
+
+            //if there is a connection (weight > 0) add an edge between both ids
+            if weight > 0 {
+                graph.add_edge(ids[i], ids[j], weight);
+            }
         }
     }
+
+    Ok(())
 }
 
+//calculates the weight of the connection between students
+//since only testing school type, parental income levels, peer and self motivation, and and learning disabilities
+fn calc_weight(student1: &StudentRecord, student2: &StudentRecord) -> u32 {
+    let weight: u32 = 0;
+
+    if student1.school_type = student2.school_type {
+        weight += 1;
+    }
+    if student1.family_income = student2.family_income {
+        weight += 1;
+    }
+    if student1.motivation_level = student2.motivation_level {
+        weight += 1;
+    }
+    if student1.peer_influence = student2.peer_influence {
+        weight += 1;
+    }
+    //only testing in this case for having a disability
+    if student1.learning_disabilities == "Yes" && student2.learning_disabilities == "Yes" {
+        weight += 1;
+    }
+
+    weight
+}
 
 fn main() {
     println!("test");
