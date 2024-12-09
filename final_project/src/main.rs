@@ -1,15 +1,14 @@
 use std::collections::HashMap; //main thing for the structs
 use csv::ReaderBuilder;
 use serde::Deserialize;
-
+use std::error::Error;
 
 //struct for the data (useful for impl)
 //while I only plan on using school type, parental income levels, peer and self motivation, and and learning disabilities
 //having this is helpful as it allows me to store of all of the data but lets me focus only on what I think is important (see above)
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct StudentRecord {
-    id: usize, //unique id for each student, not in the dataset but helpful for me
-    hours_htudied: i32,
+    hours_studied: i32,
     attendance: i32,
     parental_involvement: String,
     access_to_resources: String,
@@ -45,7 +44,7 @@ struct Graph {
 
 impl Graph {
     //this creates the graph
-    fn new()-> self {
+    fn new()-> Self {
         Graph {
             nodes: HashMap::new(),
             edges: HashMap::new(),
@@ -54,9 +53,8 @@ impl Graph {
 
     //adding a student based on their StudentRecord
     //does not do their edges
-    fn add_student(&mut self, student: StudentRecord) {
-        self.nodes.insert(student.id, student);
-        self.edges.entry(student.id).or_insert_with(HashSet::new());
+    fn add_student(&mut self, student: StudentRecord, id: usize) {
+        self.nodes.insert(id, student);
     }
 
     //adds an edge
@@ -71,20 +69,31 @@ impl Graph {
             self.edges.entry(edge).and_modify(|w: &mut u32| *w += weight).or_insert(weight);
         }
     }
-    //implement this later or something
-    /* 
-    fn print(&self, lines: usize) {
-        for x in 0..lines {
-            println!("Node {}");
+
+    fn print(&self, mut lines1: i32, mut lines2: i32) {
+        println!("Graph nodes: \n");
+        for (id, student) in &self.nodes.clone() {
+            if lines1 != 0 {
+                println!("Student w/ id: {} has characteristics {:?}", id, student);
+                lines1 += -1;
+            }
         }
-    } */
+
+        println!("\nGraph connections: \n");
+        for ((id1, id2), weight) in &self.edges.clone() {
+            if lines2 != 0 {
+                println!("Ids: {} and {} have a weight of: {}", id1, id2, weight);
+                lines2 += -1;
+            }
+        }
+    }
 }
 
 //take and heavily edited from my hw9 code but struicture is the same
 //instead it also takes in a new graph, which I then build off of, this might be dumb but let's try it out
 fn read_csv(path: &str, graph: &mut Graph) -> Result<(), Box<dyn Error>> {
     //yes headers reader
-    let mut reader = ReaderBuilder::new().has_headers(true).from_path(path)?;
+    let mut reader = csv::ReaderBuilder::new().has_headers(true).from_path(path)?;
     let mut id_count = 1; //id number that we use, go 1 at a time
 
     //over reach items in the csv
@@ -93,7 +102,7 @@ fn read_csv(path: &str, graph: &mut Graph) -> Result<(), Box<dyn Error>> {
         let student: StudentRecord = result?;
        
         //add each line to the graph as its own node (no edges)
-        graph.add_student(id_count, student);
+        graph.add_student(student, id_count);
 
         //increment id counter
         id_count += 1;
@@ -124,18 +133,18 @@ fn read_csv(path: &str, graph: &mut Graph) -> Result<(), Box<dyn Error>> {
 //calculates the weight of the connection between students
 //since only testing school type, parental income levels, peer and self motivation, and and learning disabilities
 fn calc_weight(student1: &StudentRecord, student2: &StudentRecord) -> u32 {
-    let weight: u32 = 0;
+    let mut weight: u32 = 0;
 
-    if student1.school_type = student2.school_type {
+    if student1.school_type == student2.school_type {
         weight += 1;
     }
-    if student1.family_income = student2.family_income {
+    if student1.family_income == student2.family_income {
         weight += 1;
     }
-    if student1.motivation_level = student2.motivation_level {
+    if student1.motivation_level == student2.motivation_level {
         weight += 1;
     }
-    if student1.peer_influence = student2.peer_influence {
+    if student1.peer_influence == student2.peer_influence {
         weight += 1;
     }
     //only testing in this case for having a disability
@@ -147,5 +156,9 @@ fn calc_weight(student1: &StudentRecord, student2: &StudentRecord) -> u32 {
 }
 
 fn main() {
-    println!("test");
+    let mut graph = Graph::new();
+
+    let _read_csv = read_csv("StudentPerformanceFactors.csv", &mut graph);
+
+    graph.print(5, 100);
 }
