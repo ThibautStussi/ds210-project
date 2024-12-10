@@ -1,5 +1,4 @@
 use std::collections::HashMap; //main thing for the structs
-use csv::ReaderBuilder;
 use serde::Deserialize;
 use std::error::Error;
 
@@ -7,7 +6,9 @@ use std::error::Error;
 //while I only plan on using school type, parental income levels, peer and self motivation, and and learning disabilities
 //having this is helpful as it allows me to store of all of the data but lets me focus only on what I think is important (see above)
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)] //some lines not used, this added to stop the warning of it
 struct StudentRecord {
+    //most entries are not used (as of now) but are kept because it is easier to load the data
     hours_studied: i32,
     attendance: i32,
     parental_involvement: String,
@@ -70,16 +71,19 @@ impl Graph {
         }
     }
 
+    //modified print function because printing out each entry and node would take ages
     fn print(&self, mut lines1: i32, mut lines2: i32) {
         println!("Graph nodes: \n");
+        //prints a selection of student and ids up to the number you give in the call
         for (id, student) in &self.nodes.clone() {
             if lines1 != 0 {
-                println!("Student w/ id: {} has characteristics {:?}", id, student);
+                println!("Student   / id: {} has characteristics {:?}", id, student);
                 lines1 += -1;
             }
         }
 
         println!("\nGraph connections: \n");
+        //same as above but for edges
         for ((id1, id2), weight) in &self.edges.clone() {
             if lines2 != 0 {
                 println!("Ids: {} and {} have a weight of: {}", id1, id2, weight);
@@ -87,12 +91,28 @@ impl Graph {
             }
         }
     }
+
+    //function for degree centrality
+    fn degree_centrality(&self) -> HashMap<&usize, i32> {
+        let mut cent: HashMap<&usize, i32> = HashMap::new();
+
+        //iteartes over each degree
+        for ((id1, id2), __) in &self.edges {
+            //counts the amount of connections
+            *cent.entry(id1).or_insert(0) += 1;
+            *cent.entry(id2).or_insert(0) += 1;
+        }
+
+        //returns it
+        cent
+    }
 }
 
 //take and heavily edited from my hw9 code but struicture is the same
 //instead it also takes in a new graph, which I then build off of, this might be dumb but let's try it out
 fn read_csv(path: &str, graph: &mut Graph) -> Result<(), Box<dyn Error>> {
     //yes headers reader
+    //for some reason I do not need to import use csv::ReaderBuilder;??? eh if it works it works
     let mut reader = csv::ReaderBuilder::new().has_headers(true).from_path(path)?;
     let mut id_count = 1; //id number that we use, go 1 at a time
 
@@ -161,4 +181,7 @@ fn main() {
     let _read_csv = read_csv("StudentPerformanceFactors.csv", &mut graph);
 
     graph.print(5, 100);
+
+    let centrality: HashMap<&usize, i32> = graph.degree_centrality();
+    println!("{:?}", centrality);
 }
