@@ -1,5 +1,5 @@
-use std::collections::HashMap; //main thing for the structs
-use serde::Deserialize;
+use std::collections::{HashMap, HashSet}; //main thing for the structs
+use serde::{de::Visitor, Deserialize};
 use std::error::Error;
 
 //struct for the data (useful for impl)
@@ -29,6 +29,36 @@ struct StudentRecord {
     distance_from_home: String,
     gender: String,
     exam_score: i32,
+}
+
+impl StudentRecord {
+    //helps me get the attribute give a string
+    //added all types for redundancy (probably not going to use them all)
+    fn get_attribute(&self, a: &str) -> Option<String> {
+        match a {
+            "hours_studied" => Some(self.hours_studied.to_string()),
+            "attendance" => Some(self.attendance.to_string()),
+            "parental_involvement" => Some(self.parental_involvement.clone()),
+            "access_to_resources" => Some(self.access_to_resources.clone()),
+            "extracurricular_activities" => Some(self.extracurricular_activities.clone()),
+            "sleep_hours" => Some(self.sleep_hours.to_string()),
+            "previous_scores" => Some(self.previous_scores.to_string()),
+            "motivation_level" => Some(self.motivation_level.clone()),
+            "internet_access" => Some(self.internet_access.clone()),
+            "tutoring_sessions" => Some(self.tutoring_sessions.to_string()),
+            "family_income" => Some(self.family_income.clone()),
+            "teacher_quality" => Some(self.teacher_quality.clone()),
+            "school_type" => Some(self.school_type.clone()),
+            "peer_influence" => Some(self.peer_influence.clone()),
+            "physical_activity" => Some(self.physical_activity.to_string()),
+            "learning_disabilities" => Some(self.learning_disabilities.clone()),
+            "parental_education_level" => Some(self.parental_education_level.clone()),
+            "distance_from_home" => Some(self.distance_from_home.clone()),
+            "gender" => Some(self.gender.clone()),
+            "exam_score" => Some(self.exam_score.to_string()),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -106,6 +136,56 @@ impl Graph {
         //returns it
         cent
     }
+
+    //finds and outputs clusters of vectors
+    //takes in cluster parameters (otherwise it is just one cluster)
+    fn clusters(&self, weight: u32, filter: Option<Vec<&str>>) -> Vec<Vec<usize>> {
+        //visited nodes as to not go over it again
+        let mut visited = HashSet::new();
+
+        //creates a vector of vector to store each cluster (each is its own vector)
+        let mut parts = Vec::new();
+
+        for &node in self.nodes.keys() {
+            //for every node make sure it has not been visited yet
+            if !visited.contains(&node) {
+                //stack for processing, and part being the single cluster (will become a vec in parts)
+                let mut part = Vec::new();
+                let mut stack = vec![node];
+
+                
+                while let Some(x) = stack.pop() {
+                    if visited.insert(x) {
+                        part.push(x);
+
+                        for (&(id1, id2), &w) in &self.edges {
+                            //checks which node of the pair is being analyzed (if somehow not, continue)
+                            let neighbor = if id1 == x { id2 } else if id2 == x { id1 } else { continue };
+
+                            //weight threshold
+                            if w >= weight && !visited.contains(&neighbor) {
+                                //checks a filter to see if attributes are the same, pushes if yes
+                                if let Some(attributes) = &filter {
+                                    if attributes.iter().all(|a| { 
+                                        self.nodes[&x].get_attribute(a) == self.nodes[&neighbor].get_attribute(a) }) {
+                                            stack.push(neighbor);
+                                        }
+                                }
+                                else {
+                                    stack.push(neighbor);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                parts.push(part);
+            }
+        }
+
+        parts
+    }
+
 }
 
 //take and heavily edited from my hw9 code but struicture is the same
@@ -182,6 +262,11 @@ fn main() {
 
     graph.print(5, 100);
 
-    let centrality: HashMap<&usize, i32> = graph.degree_centrality();
-    println!("{:?}", centrality);
+    //let centrality: HashMap<&usize, i32> = graph.degree_centrality();
+    //println!("Degree centrality:");
+    //println!("{:?}", centrality);
+
+    let clusters = graph.clusters(3, Some(vec!["school_type", "family_income"]));
+    println!("Clusters of nodes:");
+    println!("{:?}", clusters);
 }
