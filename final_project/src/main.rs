@@ -6,7 +6,7 @@ use std::collections::BinaryHeap;
 //struct for the data (useful for impl)
 //while I only plan on using school type, parental income levels, peer and self motivation, and and learning disabilities
 //having this is helpful as it allows me to store of all of the data but lets me focus only on what I think is important (see above)
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 #[allow(dead_code)] //some lines not used, this added to stop the warning of it
 struct StudentRecord {
     //most entries are not used (as of now) but are kept because it is easier to load the data
@@ -331,10 +331,68 @@ fn main() {
     println!("{:?}", clusters);
     */
 
-    println!("{:?}", graph.shortest_path(10));
+    //println!("{:?}", graph.shortest_path(10));
 
     /* CLOSENESS CENTRALITY 
     let close_cent = graph.closeness_centrality();
     println!("Closeness centrality:");
     println!("{:?}", close_cent);*/
+}
+
+//tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    //tests shortest path
+    #[test]
+    fn test_shortest_path() {
+        let mut graph = Graph::new();
+
+        let student1 = StudentRecord {
+            school_type: "Public".to_string(),
+            family_income: "High".to_string(),
+            motivation_level: "High".to_string(),
+            peer_influence: "Positive".to_string(),
+            learning_disabilities: "No".to_string(),
+            ..Default::default()
+        };
+
+        let student2 = StudentRecord {
+            school_type: "Private".to_string(),
+            family_income: "Medium".to_string(),
+            motivation_level: "Medium".to_string(),
+            peer_influence: "Negative".to_string(),
+            learning_disabilities: "No".to_string(),
+            ..Default::default()
+        };
+
+        let student3 = StudentRecord {
+            school_type: "Public".to_string(),
+            family_income: "Low".to_string(),
+            motivation_level: "Low".to_string(),
+            peer_influence: "Positive".to_string(),
+            learning_disabilities: "Yes".to_string(),
+            ..Default::default()
+        };
+
+        graph.add_student(student1, 1);
+        graph.add_student(student2, 2);
+        graph.add_student(student3, 3);
+
+        graph.add_edge(1, 2, 1);
+        graph.add_edge(2, 3, 1);
+        graph.add_edge(3, 3, 2);
+
+        let dists = graph.shortest_path(1);
+
+        println!("{:?}", dists);
+
+        let expected_dists: HashMap<usize, u32> = HashMap::from([(1, 0), (2, 1), (3, 2),]);
+
+        for (id, &expected_dists) in expected_dists.iter() {
+            assert_eq!(dists.get(id), Some(&expected_dists));
+        }
+    }
 }
