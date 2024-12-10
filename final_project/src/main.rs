@@ -1,7 +1,35 @@
-use std::collections::{HashMap, HashSet, VecDeque}; //main thing for the structs
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque}; //main thing for the structs
 use serde::Deserialize;
 use std::error::Error;
-use std::collections::BinaryHeap;
+use rand::Rng; //given feedback from the professor, I am using this for testing
+use std::cmp::Ordering; //dijkstra's algo
+//decision trees
+use linfa::prelude::*;
+use linfa_trees::DecisionTree;
+use ndarray::Array2;
+
+//the following are all for Dijkstra's algorithm, slightly modified
+#[derive(Debug, Clone, PartialEq)]
+struct Node {
+    id: usize,
+    distance: u32,
+}
+
+impl Eq for Node {}
+
+impl Ord for Node {
+    fn cmp(&self, other: &Self) -> Ordering {
+        //min heap by distance
+        other.distance.cmp(&self.distance)
+    }
+}
+
+impl PartialOrd for Node {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 
 //struct for the data (useful for impl)
 //while I only plan on using school type, parental income levels, peer and self motivation, and and learning disabilities
@@ -70,8 +98,8 @@ struct Graph {
     //edge id is weighted connection between two nodes, HashMap of that
 
     nodes: HashMap<usize, StudentRecord>,
-    //changed to a HashMap of a tuple of ids (usize), followed by a u32 (weight of connection)
-    edges: HashMap<(usize, usize), u32>,
+    //changed to an adjacency_list of (id, (adjacent, weight))
+    adjacency_list: HashMap<usize, Vec<(usize, u32)>>,
 }
 
 impl Graph {
@@ -79,7 +107,7 @@ impl Graph {
     fn new()-> Self {
         Graph {
             nodes: HashMap::new(),
-            edges: HashMap::new(),
+            adjacency_list: HashMap::new(),
         }
     }
 
@@ -87,18 +115,15 @@ impl Graph {
     //does not do their edges
     fn add_student(&mut self, student: StudentRecord, id: usize) {
         self.nodes.insert(id, student);
+        self.adjacency_list.entry(id).or_insert(vec![]);
     }
 
     //adds an edge
     fn add_edge(&mut self, id1: usize, id2: usize, weight: u32) {
         //added edge case detection of same id input
         if id1 != id2 {
-            //makes the tuple
-            //use min/max to have a constant ordering of edge ids
-            let edge: (usize, usize) = (id1.min(id2), id1.max(id2));
-
-            //adds the edge (above) plus the weight (either combinding weights or just adding the weight)
-            self.edges.entry(edge).and_modify(|w: &mut u32| *w += weight).or_insert(weight);
+            self.adjacency_list.entry(id1).or_default().push((id2, weight));
+            self.adjacency_list.entry(id2).or_default().push((id1, weight));
         }
     }
 
@@ -115,9 +140,11 @@ impl Graph {
 
         println!("\nGraph connections: \n");
         //same as above but for edges
-        for ((id1, id2), weight) in &self.edges.clone() {
+        for (id1, neighbors) in &self.adjacency_list {
             if lines2 != 0 {
-                println!("Ids: {} and {} have a weight of: {}", id1, id2, weight);
+                for &(neighbor, weight) in neighbors {
+                    println!("Node {} borders {} with a weight of {}", id1, neighbor, weight);
+                }
                 lines2 += -1;
             }
         }
@@ -128,10 +155,10 @@ impl Graph {
         let mut cent: HashMap<&usize, i32> = HashMap::new();
 
         //iteartes over each degree
-        for ((id1, id2), __) in &self.edges {
+        for (id1, neighbors) in &self.adjacency_list {
             //counts the amount of connections
-            *cent.entry(id1).or_insert(0) += 1;
-            *cent.entry(id2).or_insert(0) += 1;
+            let degree = neighbors.len() as i32;
+            cent.insert(id1, degree);
         }
 
         //returns it
@@ -140,11 +167,9 @@ impl Graph {
 
     //finds and outputs clusters of vectors
     //takes in cluster parameters (otherwise it is just one cluster)
+    //connected components but I use this term becasue its easier to understand
     fn clusters(&self, weight: u32, filter: Option<Vec<&str>>) -> Vec<Vec<usize>> {
-        //visited nodes as to not go over it again
         let mut visited = HashSet::new();
-
-        //creates a vector of vector to store each cluster (each is its own vector)
         let mut parts = Vec::new();
 
         for &node in self.nodes.keys() {
@@ -159,21 +184,18 @@ impl Graph {
                     if visited.insert(x) {
                         part.push(x);
 
-                        for (&(id1, id2), &w) in &self.edges {
-                            //checks which node of the pair is being analyzed (if somehow not, continue)
-                            let neighbor = if id1 == x { id2 } else if id2 == x { id1 } else { continue };
-
+                        for (neighbor, w) in &self.adjacency_list[&x] {
                             //weight threshold
-                            if w >= weight && !visited.contains(&neighbor) {
+                            if w >= &weight && !visited.contains(&neighbor) {
                                 //checks a filter to see if attributes are the same, pushes if yes
                                 if let Some(attributes) = &filter {
                                     if attributes.iter().all(|a| { 
                                         self.nodes[&x].get_attribute(a) == self.nodes[&neighbor].get_attribute(a) }) {
-                                            stack.push(neighbor);
+                                            stack.push(*neighbor);
                                         }
                                 }
                                 else {
-                                    stack.push(neighbor);
+                                    stack.push(*neighbor);
                                 }
                             }
                         }
@@ -183,14 +205,42 @@ impl Graph {
                 parts.push(part);
             }
         }
-
-        parts
+        parts 
     }
 
     //shortest path from id1 to any other node
-    //HashMap is <id, dist>
-    //this is taking forever, probably not feasible??????
+    //this takes a while, a few seconds per node
+    //CHANGE TO Dijkstra's
     fn shortest_path(&self, id1: usize) -> HashMap<usize, u32> {
+        //this is now done using Dijkstra's algorithm
+        let mut distances = HashMap::new();
+        let mut prio_q = BinaryHeap::new();
+
+        //initializes max distance for no connection
+        for &node in self.nodes.keys() {
+            distances.insert(node, u32::MAX);
+        }
+
+        //start being zero dist
+        distances.insert(id1, 0);
+        prio_q.push(Node { id: id1, distance: 0 });
+
+        while let Some(Node {id, distance }) = prio_q.pop() {
+            if distance > *distances.get(&id).unwrap_or(&u32::MAX) {
+                continue;
+            }
+
+            //weight ignored (it helps with calculation)
+            for &(neighbor, _) in &self.adjacency_list[&id] {
+                let new_dist = distance + 1;
+                    if &new_dist < distances.get(&neighbor).unwrap_or(&u32::MAX) {
+                        distances.insert(neighbor, new_dist);
+                        prio_q.push(Node { id: neighbor, distance: new_dist })
+                    }
+            }
+        }
+
+        /* this is BFS and OLD but kept for reference if needed
         let mut distances = HashMap::new();
         let mut visited = HashSet::new();
         //use VecDeque for queue since its the fastest way + easy to use
@@ -206,7 +256,7 @@ impl Graph {
                 if id1 == current || id2 == current {
                     let neighbor = if id1 == current { id2 } else { id1 };
 
-                    println!("working on {}", current);
+                    //println!("working on {}", current);
                     if !visited.contains(&neighbor) {
                         visited.insert(neighbor);
                         distances.insert(neighbor, distances[&current] + 1);
@@ -214,7 +264,7 @@ impl Graph {
                     }
                 }
             }
-        }
+        } */
         distances
     }
     
@@ -229,6 +279,8 @@ impl Graph {
             let sum: u32 = shortest_paths.values().filter_map(|dist| 
                 if *dist == u32::MAX { None } else { Some(*dist) }).sum();
 
+            println!("Working on node with id: {}", id);
+
             //div by 0 error stop
             if sum > 0 {
                 let closeness = 1.0 / (sum as f64);
@@ -242,15 +294,22 @@ impl Graph {
         closeness_cent
     }
 
+    //how tf have I not done a DecisionTree yet
+
 }
 
 //take and heavily edited from my hw9 code but struicture is the same
 //instead it also takes in a new graph, which I then build off of, this might be dumb but let's try it out
+
+/* IMPORTANT */
+//ONLY 20% of the data is used given how dense the graph it, I need to work on this more later
+//this was told to me by Prof. Chator to do, shouldn't affect overall analysis tho
 fn read_csv(path: &str, graph: &mut Graph) -> Result<(), Box<dyn Error>> {
     //yes headers reader
     //for some reason I do not need to import use csv::ReaderBuilder;??? eh if it works it works
     let mut reader = csv::ReaderBuilder::new().has_headers(true).from_path(path)?;
     let mut id_count = 1; //id number that we use, go 1 at a time
+    let mut rng = rand::thread_rng();
 
     //over reach items in the csv
     for result in reader.deserialize() {
@@ -258,7 +317,10 @@ fn read_csv(path: &str, graph: &mut Graph) -> Result<(), Box<dyn Error>> {
         let student: StudentRecord = result?;
        
         //add each line to the graph as its own node (no edges)
-        graph.add_student(student, id_count);
+        //20% chance to add since it is hard to run all these commands on such a large graph
+        if rng.gen_bool(0.2) {
+            graph.add_student(student, id_count);
+        }
 
         //increment id counter
         id_count += 1;
@@ -288,6 +350,7 @@ fn read_csv(path: &str, graph: &mut Graph) -> Result<(), Box<dyn Error>> {
 
 //calculates the weight of the connection between students
 //since only testing school type, parental income levels, peer and self motivation, and and learning disabilities
+//probably can just be inside read_csv but keeping it as a func in case I need it ever somehow idk
 fn calc_weight(student1: &StudentRecord, student2: &StudentRecord) -> u32 {
     let mut weight: u32 = 0;
 
@@ -316,7 +379,7 @@ fn main() {
 
     let _read_csv = read_csv("StudentPerformanceFactors.csv", &mut graph);
 
-    graph.print(5, 100);
+    //graph.print(5, 5);
 
     /* DEGREE CENTRALITY
     let centrality: HashMap<&usize, i32> = graph.degree_centrality();
@@ -325,18 +388,20 @@ fn main() {
     */
 
     
-    /* CLUSTER NODES
+    /* CLUSTER NODES */
     let clusters = graph.clusters(3, Some(vec!["school_type", "family_income"]));
     println!("Clusters of nodes:");
     println!("{:?}", clusters);
-    */
+    
 
-    //println!("{:?}", graph.shortest_path(10));
+    println!("{:?}", graph.shortest_path(10));
 
-    /* CLOSENESS CENTRALITY 
-    let close_cent = graph.closeness_centrality();
-    println!("Closeness centrality:");
-    println!("{:?}", close_cent);*/
+    println!("\n\n\n\n\n\n");
+
+    /* CLOSENESS CENTRALITY */
+    //let close_cent = graph.closeness_centrality();
+    //println!("Closeness centrality:");
+    //println!("{:?}", close_cent);
 }
 
 //tests
