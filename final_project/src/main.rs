@@ -1,6 +1,7 @@
-use std::collections::{HashMap, HashSet}; //main thing for the structs
-use serde::{de::Visitor, Deserialize};
+use std::collections::{HashMap, HashSet, VecDeque}; //main thing for the structs
+use serde::Deserialize;
 use std::error::Error;
+use std::collections::BinaryHeap;
 
 //struct for the data (useful for impl)
 //while I only plan on using school type, parental income levels, peer and self motivation, and and learning disabilities
@@ -186,6 +187,61 @@ impl Graph {
         parts
     }
 
+    //shortest path from id1 to any other node
+    //HashMap is <id, dist>
+    //this is taking forever, probably not feasible??????
+    fn shortest_path(&self, id1: usize) -> HashMap<usize, u32> {
+        let mut distances = HashMap::new();
+        let mut visited = HashSet::new();
+        //use VecDeque for queue since its the fastest way + easy to use
+        let mut q = VecDeque::new();
+
+        //make sure the start is accounted for
+        distances.insert(id1, 0);
+        visited.insert(id1);
+        q.push_back(id1);
+
+         while let Some(current) = q.pop_front() {
+            for (&(id1, id2), _) in &self.edges {
+                if id1 == current || id2 == current {
+                    let neighbor = if id1 == current { id2 } else { id1 };
+
+                    println!("working on {}", current);
+                    if !visited.contains(&neighbor) {
+                        visited.insert(neighbor);
+                        distances.insert(neighbor, distances[&current] + 1);
+                        q.push_back(neighbor);
+                    }
+                }
+            }
+        }
+        distances
+    }
+    
+    //calcualtes closeness centrality for each point
+    //does the basic reciprocal sum of shortest distances, nothing complicated
+    fn closeness_centrality(&self) -> HashMap<usize, f64> {
+        let mut closeness_cent: HashMap<usize, f64> = HashMap::new();
+
+        for &id in self.nodes.keys() {
+            let shortest_paths = self.shortest_path(id);
+            //since u32::MAX is used for not connected, just remove them (prob won't change much since 1/u32::MAX is v small but still)
+            let sum: u32 = shortest_paths.values().filter_map(|dist| 
+                if *dist == u32::MAX { None } else { Some(*dist) }).sum();
+
+            //div by 0 error stop
+            if sum > 0 {
+                let closeness = 1.0 / (sum as f64);
+                closeness_cent.insert(id, closeness);
+            }
+            else {
+                closeness_cent.insert(id, 0.0);
+            }
+        }
+
+        closeness_cent
+    }
+
 }
 
 //take and heavily edited from my hw9 code but struicture is the same
@@ -262,11 +318,23 @@ fn main() {
 
     graph.print(5, 100);
 
-    //let centrality: HashMap<&usize, i32> = graph.degree_centrality();
-    //println!("Degree centrality:");
-    //println!("{:?}", centrality);
+    /* DEGREE CENTRALITY
+    let centrality: HashMap<&usize, i32> = graph.degree_centrality();
+    println!("Degree centrality:");
+    println!("{:?}", centrality);
+    */
 
+    
+    /* CLUSTER NODES
     let clusters = graph.clusters(3, Some(vec!["school_type", "family_income"]));
     println!("Clusters of nodes:");
     println!("{:?}", clusters);
+    */
+
+    println!("{:?}", graph.shortest_path(10));
+
+    /* CLOSENESS CENTRALITY 
+    let close_cent = graph.closeness_centrality();
+    println!("Closeness centrality:");
+    println!("{:?}", close_cent);*/
 }
