@@ -1,4 +1,5 @@
 use std::collections::{BinaryHeap, HashMap, HashSet}; //main thing for the structs
+use std::num;
 use serde::Deserialize;
 use std::error::Error;
 use rand::Rng; //given feedback from the professor, I am using this for testing
@@ -375,6 +376,64 @@ impl Graph {
         Ok(model)
     }
 
+    //given a student, predict their exam score
+    //self explanatory, just makes an array using re-used code and runs a model.predict on it
+    fn prediction(&self, model: DecisionTree<f64, usize>, student: &StudentRecord) -> usize {
+        let mut input_features = Vec::new();
+
+        //repeat from decision_trees()
+        let school_type_encode: Vec<f64> = match student.school_type.as_str() {
+            "Public" => vec![1.0, 0.0],
+            "Private" => vec![0.0, 1.0],
+            _ => vec![0.0, 0.0], };
+        
+        let family_inc_encode: Vec<f64> = match student.family_income.as_str() {
+            "Low" => vec![1.0, 0.0, 0.0],
+            "Medium" => vec![0.0, 1.0, 0.0],
+            "High" => vec![0.0, 0.0, 1.0],
+            _ => vec![0.0, 0.0, 0.0], };
+
+        let peer_influ_encode: Vec<f64> = match student.peer_influence.as_str() {
+            "Negative" => vec![1.0, 0.0, 0.0],
+            "Neutral" => vec![0.0, 1.0, 0.0],
+            "Positive" => vec![0.0, 0.0, 1.0],
+            _ => vec![0.0, 0.0, 0.0], };
+        
+        let motiv_encode: Vec<f64> = match student.motivation_level.as_str() {
+            "Low" => vec![1.0, 0.0, 0.0],
+            "Medium" => vec![0.0, 1.0, 0.0],
+            "High" => vec![0.0, 0.0, 1.0],
+            _ => vec![0.0, 0.0, 0.0], };
+        
+        let learn_disabil_encode: Vec<f64> = match student.learning_disabilities.as_str() {
+            "Yes" => vec![1.0, 0.0],
+            "No" => vec![0.0, 1.0],
+            _ => vec![0.0, 0.0], };
+
+        //adds the encoded categorical variables
+        input_features.extend(school_type_encode);
+        input_features.extend(family_inc_encode);
+        input_features.extend(peer_influ_encode);
+        input_features.extend(motiv_encode);
+        input_features.extend(learn_disabil_encode);
+
+        //adds the continous variables
+        input_features.push(student.hours_studied as f64);
+        input_features.push(student.attendance as f64);
+        input_features.push(student.previous_scores as f64);
+        input_features.push(student.tutoring_sessions as f64);
+
+        //turns the inputs into an array
+        let input_array= ndarray::Array::from_shape_vec(
+            (1, input_features.len()), input_features).expect("Failed to create input array");
+
+        //prediction calculation from the model
+        let prediction = model.predict(&input_array);
+
+        //println!("Predicted score: {}, actual score: {}", prediction[0], student.exam_score);
+        prediction[0]
+    }
+
 }
 
 //take and heavily edited from my hw9 code but struicture is the same
@@ -383,7 +442,10 @@ impl Graph {
 /* IMPORTANT */
 //ONLY ~20% of the data is used given how dense the graph it, I need to work on this more later
 //this was told to me by Prof. Chator to do, shouldn't affect overall analysis tho
-fn read_csv(path: &str, graph: &mut Graph) -> Result<(), Box<dyn Error>> {
+
+/* UPDATE */
+//creates two graphs, a train and a test graph, one is 20%, the other is not
+fn read_csv(path: &str, graph1: &mut Graph, graph2: &mut Graph) -> Result<(), Box<dyn Error>> {
     //yes headers reader
     //for some reason I do not need to import use csv::ReaderBuilder;??? eh if it works it works
     let mut reader = csv::ReaderBuilder::new().has_headers(true).from_path(path)?;
@@ -398,28 +460,52 @@ fn read_csv(path: &str, graph: &mut Graph) -> Result<(), Box<dyn Error>> {
         //add each line to the graph as its own node (no edges)
         //20% chance to add since it is hard to run all these commands on such a large graph
         if rng.gen_bool(0.2) {
-            graph.add_student(student, id_count);
+            graph1.add_student(student, id_count);
+        }
+        else {
+            graph2.add_student(student, id_count);
         }
 
         //increment id counter
         id_count += 1;
     }
 
-    let ids: Vec<usize> = graph.nodes.keys().cloned().collect();
-    for i in 0..ids.len() {
+    //runs it over the first graph
+    let ids1: Vec<usize> = graph1.nodes.keys().cloned().collect();
+    for i in 0..ids1.len() {
         //iterates over every student-student connection
         //do i, i+1 since for connection 20, you've4 already checked 1-19 so no need to repeat
         //slow for the first half, second half a lot faster
-        for j in (i + 1)..ids.len() {
+        for j in (i + 1)..ids1.len() {
             //get their ndoe
-            let student1 = &graph.nodes[&ids[i]];
-            let student2 = &graph.nodes[&ids[j]];
+            let student1 = &graph1.nodes[&ids1[i]];
+            let student2 = &graph1.nodes[&ids1[j]];
 
             let weight: u32 = calc_weight(student1, student2);
 
             //if there is a connection (weight > 0) add an edge between both ids
             if weight > 0 {
-                graph.add_edge(ids[i], ids[j], weight);
+                graph1.add_edge(ids1[i], ids1[j], weight);
+            }
+        }
+    }
+    
+    //runs it over the second graph too (repeat code)
+    let ids2: Vec<usize> = graph2.nodes.keys().cloned().collect();
+    for i in 0..ids2.len() {
+        //iterates over every student-student connection
+        //do i, i+1 since for connection 20, you've4 already checked 1-19 so no need to repeat
+        //slow for the first half, second half a lot faster
+        for j in (i + 1)..ids2.len() {
+            //get their ndoe
+            let student1 = &graph2.nodes[&ids2[i]];
+            let student2 = &graph2.nodes[&ids2[j]];
+
+            let weight: u32 = calc_weight(student1, student2);
+
+            //if there is a connection (weight > 0) add an edge between both ids
+            if weight > 0 {
+                graph2.add_edge(ids2[i], ids2[j], weight);
             }
         }
     }
@@ -453,39 +539,58 @@ fn calc_weight(student1: &StudentRecord, student2: &StudentRecord) -> u32 {
     weight
 }
 
-fn main() {
-    let mut graph = Graph::new();
+fn accuracy(test_graph: &Graph, model: DecisionTree<f64, usize>) -> f64 {
+    let mut off_by: f64 = 0.0;
+    for (_, student) in &test_graph.nodes {
+        let prediction = test_graph.prediction(model.clone(), student) as f64;
+        let off: f64 = student.exam_score as f64 - prediction;
+        //println!("Predicted score: {}, actual score: {}, off by: {}", prediction, student.exam_score, off.abs());
+        off_by += off.abs();
+    }
+    let test_rows: f64 = test_graph.nodes.len() as f64;
+    let accuracy = (1.0 - (off_by / (test_rows * 100.0))) as f64;
 
-    let _read_csv = read_csv("StudentPerformanceFactors.csv", &mut graph);
+    accuracy
+}
+
+fn main() {
+    let mut train_graph = Graph::new();
+    let mut test_graph = Graph::new();
+
+    let _read_csv = read_csv("StudentPerformanceFactors.csv", &mut train_graph, &mut test_graph);
 
     //graph.print(5, 5);
 
     /* DEGREE CENTRALITY */
-    let centrality: HashMap<&usize, i32> = graph.degree_centrality();
+    let centrality: HashMap<&usize, i32> = train_graph.degree_centrality();
     println!("Degree centrality:");
     println!("{:?}", centrality);
 
     
     /* CLUSTER NODES */
-    let clusters = graph.clusters(3, Some(vec!["school_type", "family_income"]));
+    let clusters = train_graph.clusters(3, Some(vec!["school_type", "family_income"]));
     println!("Clusters of nodes:");
     println!("{:?}", clusters);
     
 
     //this is done since I can't just do a numbered node since only 20% come through, it would fail 20% of the time
-    for (id, _) in &graph.nodes {
-        println!("The shortest path to all nodes from {} is {:?}", *id, &graph.shortest_path(*id));
+    for (id, _) in &train_graph.nodes {
+        println!("The shortest path to all nodes from {} is {:?}", *id, &train_graph.shortest_path(*id));
         break
     }
 
     println!("\n\n\n\n\n\n");
 
     /* CLOSENESS CENTRALITY 
-    let close_cent = graph.closeness_centrality();
+    let close_cent = train_graph.closeness_centrality();
     println!("Closeness centrality:");
     println!("{:?}", close_cent); */
 
-    graph.decision_tree();
+    let model = train_graph.decision_tree();
+
+    let accuracy = accuracy(&test_graph, model.expect("REASON")) * 100.0;
+    println!("The model has an accuracy of: {:.2}%", accuracy);
+
 }
 
 //tests
