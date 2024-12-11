@@ -88,7 +88,7 @@ dependencies = [
  "csv",
  "linfa",
  "linfa-trees",
- "ndarray 0.16.1",
+ "ndarray 0.15.6",
  "rand",
  "serde",
 ]

@@ -1,10 +1,11 @@
-use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque}; //main thing for the structs
+use std::collections::{BinaryHeap, HashMap, HashSet}; //main thing for the structs
 use serde::Deserialize;
 use std::error::Error;
 use rand::Rng; //given feedback from the professor, I am using this for testing
 use std::cmp::Ordering; //dijkstra's algo
 //decision trees
 use linfa::prelude::*;
+use linfa::dataset::Dataset;
 use linfa_trees::DecisionTree;
 use ndarray::Array2;
 
@@ -132,7 +133,7 @@ impl Graph {
         println!("Graph nodes: \n");
         //prints a selection of student and ids up to the number you give in the call
         for (id, student) in &self.nodes.clone() {
-            if lines1 != 0 {
+            if lines1 > 0 {
                 println!("Student   / id: {} has characteristics {:?}", id, student);
                 lines1 += -1;
             }
@@ -141,7 +142,7 @@ impl Graph {
         println!("\nGraph connections: \n");
         //same as above but for edges
         for (id1, neighbors) in &self.adjacency_list {
-            if lines2 != 0 {
+            if lines2 > 0 {
                 for &(neighbor, weight) in neighbors {
                     println!("Node {} borders {} with a weight of {}", id1, neighbor, weight);
                 }
@@ -209,7 +210,6 @@ impl Graph {
     }
 
     //shortest path from id1 to any other node
-    //this takes a while, a few seconds per node
     //CHANGE TO Dijkstra's
     fn shortest_path(&self, id1: usize) -> HashMap<usize, u32> {
         //this is now done using Dijkstra's algorithm
@@ -278,9 +278,6 @@ impl Graph {
             //since u32::MAX is used for not connected, just remove them (prob won't change much since 1/u32::MAX is v small but still)
             let sum: u32 = shortest_paths.values().filter_map(|dist| 
                 if *dist == u32::MAX { None } else { Some(*dist) }).sum();
-
-            println!("Working on node with id: {}", id);
-
             //div by 0 error stop
             if sum > 0 {
                 let closeness = 1.0 / (sum as f64);
@@ -294,7 +291,89 @@ impl Graph {
         closeness_cent
     }
 
-    //how tf have I not done a DecisionTree yet
+    //creates the decision tree needede for decisiontree analysis
+    //this took a while to code omg, so many minor bugs
+    fn decision_tree(&self) -> Result<DecisionTree<f64, usize>, Box<dyn Error>> {
+        let mut features:Vec<Vec<f64>> = Vec::new();
+        let mut labels: Vec<usize> = Vec::new();
+
+        //iterates through each StudentRecord to create their feature vector w/ exam score as label
+        for (_id, student) in self.nodes.clone() {
+            let mut feature_v = Vec::new();
+
+            //encodes categoricals using one-hot encoding
+            let school_type_encode: Vec<f64> = match student.school_type.as_str() {
+                "Public" => vec![1.0, 0.0],
+                "Private" => vec![0.0, 1.0],
+                _ => vec![0.0, 0.0], };
+            
+            let family_inc_encode: Vec<f64> = match student.family_income.as_str() {
+                "Low" => vec![1.0, 0.0, 0.0],
+                "Medium" => vec![0.0, 1.0, 0.0],
+                "High" => vec![0.0, 0.0, 1.0],
+                _ => vec![0.0, 0.0, 0.0], };
+
+            let peer_influ_encode: Vec<f64> = match student.peer_influence.as_str() {
+                "Negative" => vec![1.0, 0.0, 0.0],
+                "Neutral" => vec![0.0, 1.0, 0.0],
+                "Positive" => vec![0.0, 0.0, 1.0],
+                _ => vec![0.0, 0.0, 0.0], };
+            
+            let motiv_encode: Vec<f64> = match student.motivation_level.as_str() {
+                "Low" => vec![1.0, 0.0, 0.0],
+                "Medium" => vec![0.0, 1.0, 0.0],
+                "High" => vec![0.0, 0.0, 1.0],
+                _ => vec![0.0, 0.0, 0.0], };
+            
+            let learn_disabil_encode: Vec<f64> = match student.learning_disabilities.as_str() {
+                "Yes" => vec![1.0, 0.0],
+                "No" => vec![0.0, 1.0],
+                _ => vec![0.0, 0.0], };
+
+            //adds the encoded categorical variables
+            feature_v.extend(school_type_encode);
+            feature_v.extend(family_inc_encode);
+            feature_v.extend(peer_influ_encode);
+            feature_v.extend(motiv_encode);
+            feature_v.extend(learn_disabil_encode);
+
+            //adds the continous variables
+            feature_v.push(student.hours_studied as f64);
+            feature_v.push(student.attendance as f64);
+            feature_v.push(student.previous_scores as f64);
+            feature_v.push(student.tutoring_sessions as f64);
+
+            features.push(feature_v);
+            //makes the exam score the label
+            labels.push(student.exam_score as usize);
+        }
+        
+        let final_features: Array2<f64> = Array2::from_shape_vec((features.len(), features[0].len()), features.concat())?;
+        let final_labels: Array2<usize> = Array2::from_shape_vec((labels.len(), 1), labels.clone())?;
+
+        let dataset = Dataset::new(final_features, final_labels).with_feature_names(
+            vec!["School Type", "Family Income", "Peer Influence", "Motivation", "Learning Disabilities", "Hours Studied",
+            "Attendance", "Previous Scores", "Tutoring Sessions"]);
+        //println!("\n\n\n\nDataset records: {:?}", dataset.records().shape());
+        //println!("\n\n\n\nDataset targets: {:?}", dataset.targets().shape());
+
+        //this is b/c of the randomness of the read_csv making stuff not the same
+        let rows = dataset.targets.len();
+
+        //this clones the target/records and fixes a shape issues
+        //this bug took me hours to fix, ignore the insane amount of print statements here
+        let records = dataset.records().clone();
+        let targets = dataset.targets().clone().into_shape((rows,)).unwrap();
+        let dataset = Dataset::new(records, targets);
+
+        let model = DecisionTree::params().fit(&dataset)?;
+
+        //println!("\n\n\n\nDataset records: {:?}", dataset.records().shape());
+        //println!("\n\n\n\nDataset targets: {:?}", dataset.targets().shape());
+        //println!("{:?}", model);
+
+        Ok(model)
+    }
 
 }
 
@@ -302,7 +381,7 @@ impl Graph {
 //instead it also takes in a new graph, which I then build off of, this might be dumb but let's try it out
 
 /* IMPORTANT */
-//ONLY 20% of the data is used given how dense the graph it, I need to work on this more later
+//ONLY ~20% of the data is used given how dense the graph it, I need to work on this more later
 //this was told to me by Prof. Chator to do, shouldn't affect overall analysis tho
 fn read_csv(path: &str, graph: &mut Graph) -> Result<(), Box<dyn Error>> {
     //yes headers reader
@@ -381,11 +460,10 @@ fn main() {
 
     //graph.print(5, 5);
 
-    /* DEGREE CENTRALITY
+    /* DEGREE CENTRALITY */
     let centrality: HashMap<&usize, i32> = graph.degree_centrality();
     println!("Degree centrality:");
     println!("{:?}", centrality);
-    */
 
     
     /* CLUSTER NODES */
@@ -394,14 +472,20 @@ fn main() {
     println!("{:?}", clusters);
     
 
-    println!("{:?}", graph.shortest_path(10));
+    //this is done since I can't just do a numbered node since only 20% come through, it would fail 20% of the time
+    for (id, _) in &graph.nodes {
+        println!("The shortest path to all nodes from {} is {:?}", *id, &graph.shortest_path(*id));
+        break
+    }
 
     println!("\n\n\n\n\n\n");
 
-    /* CLOSENESS CENTRALITY */
-    //let close_cent = graph.closeness_centrality();
-    //println!("Closeness centrality:");
-    //println!("{:?}", close_cent);
+    /* CLOSENESS CENTRALITY 
+    let close_cent = graph.closeness_centrality();
+    println!("Closeness centrality:");
+    println!("{:?}", close_cent); */
+
+    graph.decision_tree();
 }
 
 //tests
