@@ -1,5 +1,9 @@
+/* THIBAUT STUSSI'S DS210 FINAL PROJECT */
+//This project aims to understand the connection between various characteristics and exam scores
+//This project uses the attached StudentPerformanceFactors.csv file taken from Kaggle
+
+
 use std::collections::{BinaryHeap, HashMap, HashSet}; //main thing for the structs
-use std::num;
 use serde::Deserialize;
 use std::error::Error;
 use rand::Rng; //given feedback from the professor, I am using this for testing
@@ -94,7 +98,7 @@ impl StudentRecord {
 
 #[derive(Debug)]
 struct Graph {
-    //usuze is id (number)
+    //usize is id (number)
     //meaning I can find a specific student if needed
     //node id is the student
     //edge id is weighted connection between two nodes, HashMap of that
@@ -129,13 +133,13 @@ impl Graph {
         }
     }
 
-    //modified print function because printing out each entry and node would take ages
+    //modified print function that prints out a select amount, since all would be too much
     fn print(&self, mut lines1: i32, mut lines2: i32) {
         println!("Graph nodes: \n");
         //prints a selection of student and ids up to the number you give in the call
         for (id, student) in &self.nodes.clone() {
             if lines1 > 0 {
-                println!("Student   / id: {} has characteristics {:?}", id, student);
+                println!("Student with id {} has characteristics: {:?}", id, student);
                 lines1 += -1;
             }
         }
@@ -145,7 +149,7 @@ impl Graph {
         for (id1, neighbors) in &self.adjacency_list {
             if lines2 > 0 {
                 for &(neighbor, weight) in neighbors {
-                    println!("Node {} borders {} with a weight of {}", id1, neighbor, weight);
+                    println!("Student with id {} is connected to {} with a weight of {}", id1, neighbor, weight);
                 }
                 lines2 += -1;
             }
@@ -162,7 +166,6 @@ impl Graph {
             let degree = neighbors.len() as i32;
             cent.insert(id1, degree);
         }
-
         //returns it
         cent
     }
@@ -180,7 +183,6 @@ impl Graph {
                 //stack for processing, and part being the single cluster (will become a vec in parts)
                 let mut part = Vec::new();
                 let mut stack = vec![node];
-
                 
                 while let Some(x) = stack.pop() {
                     if visited.insert(x) {
@@ -203,7 +205,6 @@ impl Graph {
                         }
                     }
                 }
-
                 parts.push(part);
             }
         }
@@ -230,7 +231,6 @@ impl Graph {
             if distance > *distances.get(&id).unwrap_or(&u32::MAX) {
                 continue;
             }
-
             //weight ignored (it helps with calculation)
             for &(neighbor, _) in &self.adjacency_list[&id] {
                 let new_dist = distance + 1;
@@ -240,32 +240,6 @@ impl Graph {
                     }
             }
         }
-
-        /* this is BFS and OLD but kept for reference if needed
-        let mut distances = HashMap::new();
-        let mut visited = HashSet::new();
-        //use VecDeque for queue since its the fastest way + easy to use
-        let mut q = VecDeque::new();
-
-        //make sure the start is accounted for
-        distances.insert(id1, 0);
-        visited.insert(id1);
-        q.push_back(id1);
-
-         while let Some(current) = q.pop_front() {
-            for (&(id1, id2), _) in &self.edges {
-                if id1 == current || id2 == current {
-                    let neighbor = if id1 == current { id2 } else { id1 };
-
-                    //println!("working on {}", current);
-                    if !visited.contains(&neighbor) {
-                        visited.insert(neighbor);
-                        distances.insert(neighbor, distances[&current] + 1);
-                        q.push_back(neighbor);
-                    }
-                }
-            }
-        } */
         distances
     }
     
@@ -288,7 +262,6 @@ impl Graph {
                 closeness_cent.insert(id, 0.0);
             }
         }
-
         closeness_cent
     }
 
@@ -306,26 +279,22 @@ impl Graph {
             let school_type_encode: Vec<f64> = match student.school_type.as_str() {
                 "Public" => vec![1.0, 0.0],
                 "Private" => vec![0.0, 1.0],
-                _ => vec![0.0, 0.0], };
-            
+                _ => vec![0.0, 0.0], };  
             let family_inc_encode: Vec<f64> = match student.family_income.as_str() {
                 "Low" => vec![1.0, 0.0, 0.0],
                 "Medium" => vec![0.0, 1.0, 0.0],
                 "High" => vec![0.0, 0.0, 1.0],
                 _ => vec![0.0, 0.0, 0.0], };
-
             let peer_influ_encode: Vec<f64> = match student.peer_influence.as_str() {
                 "Negative" => vec![1.0, 0.0, 0.0],
                 "Neutral" => vec![0.0, 1.0, 0.0],
                 "Positive" => vec![0.0, 0.0, 1.0],
                 _ => vec![0.0, 0.0, 0.0], };
-            
             let motiv_encode: Vec<f64> = match student.motivation_level.as_str() {
                 "Low" => vec![1.0, 0.0, 0.0],
                 "Medium" => vec![0.0, 1.0, 0.0],
                 "High" => vec![0.0, 0.0, 1.0],
                 _ => vec![0.0, 0.0, 0.0], };
-            
             let learn_disabil_encode: Vec<f64> = match student.learning_disabilities.as_str() {
                 "Yes" => vec![1.0, 0.0],
                 "No" => vec![0.0, 1.0],
@@ -337,7 +306,6 @@ impl Graph {
             feature_v.extend(peer_influ_encode);
             feature_v.extend(motiv_encode);
             feature_v.extend(learn_disabil_encode);
-
             //adds the continous variables
             feature_v.push(student.hours_studied as f64);
             feature_v.push(student.attendance as f64);
@@ -357,7 +325,6 @@ impl Graph {
             "Attendance", "Previous Scores", "Tutoring Sessions"]);
         //println!("\n\n\n\nDataset records: {:?}", dataset.records().shape());
         //println!("\n\n\n\nDataset targets: {:?}", dataset.targets().shape());
-
         //this is b/c of the randomness of the read_csv making stuff not the same
         let rows = dataset.targets.len();
 
@@ -368,17 +335,15 @@ impl Graph {
         let dataset = Dataset::new(records, targets);
 
         let model = DecisionTree::params().fit(&dataset)?;
-
         //println!("\n\n\n\nDataset records: {:?}", dataset.records().shape());
         //println!("\n\n\n\nDataset targets: {:?}", dataset.targets().shape());
         //println!("{:?}", model);
-
         Ok(model)
     }
 
     //given a student, predict their exam score
     //self explanatory, just makes an array using re-used code and runs a model.predict on it
-    fn prediction(&self, model: DecisionTree<f64, usize>, student: &StudentRecord) -> usize {
+    fn prediction(&self, model: &DecisionTree<f64, usize>, student: &StudentRecord) -> usize {
         let mut input_features = Vec::new();
 
         //repeat from decision_trees()
@@ -386,25 +351,21 @@ impl Graph {
             "Public" => vec![1.0, 0.0],
             "Private" => vec![0.0, 1.0],
             _ => vec![0.0, 0.0], };
-        
         let family_inc_encode: Vec<f64> = match student.family_income.as_str() {
             "Low" => vec![1.0, 0.0, 0.0],
             "Medium" => vec![0.0, 1.0, 0.0],
             "High" => vec![0.0, 0.0, 1.0],
             _ => vec![0.0, 0.0, 0.0], };
-
         let peer_influ_encode: Vec<f64> = match student.peer_influence.as_str() {
             "Negative" => vec![1.0, 0.0, 0.0],
             "Neutral" => vec![0.0, 1.0, 0.0],
             "Positive" => vec![0.0, 0.0, 1.0],
             _ => vec![0.0, 0.0, 0.0], };
-        
         let motiv_encode: Vec<f64> = match student.motivation_level.as_str() {
             "Low" => vec![1.0, 0.0, 0.0],
             "Medium" => vec![0.0, 1.0, 0.0],
             "High" => vec![0.0, 0.0, 1.0],
             _ => vec![0.0, 0.0, 0.0], };
-        
         let learn_disabil_encode: Vec<f64> = match student.learning_disabilities.as_str() {
             "Yes" => vec![1.0, 0.0],
             "No" => vec![0.0, 1.0],
@@ -416,7 +377,6 @@ impl Graph {
         input_features.extend(peer_influ_encode);
         input_features.extend(motiv_encode);
         input_features.extend(learn_disabil_encode);
-
         //adds the continous variables
         input_features.push(student.hours_studied as f64);
         input_features.push(student.attendance as f64);
@@ -425,15 +385,13 @@ impl Graph {
 
         //turns the inputs into an array
         let input_array= ndarray::Array::from_shape_vec(
-            (1, input_features.len()), input_features).expect("Failed to create input array");
-
+            (1, input_features.len()), input_features).expect("Input array error oop");
         //prediction calculation from the model
         let prediction = model.predict(&input_array);
 
         //println!("Predicted score: {}, actual score: {}", prediction[0], student.exam_score);
         prediction[0]
     }
-
 }
 
 //take and heavily edited from my hw9 code but struicture is the same
@@ -456,7 +414,6 @@ fn read_csv(path: &str, graph1: &mut Graph, graph2: &mut Graph) -> Result<(), Bo
     for result in reader.deserialize() {
         //each line as a StudentRecord
         let student: StudentRecord = result?;
-       
         //add each line to the graph as its own node (no edges)
         //20% chance to add since it is hard to run all these commands on such a large graph
         if rng.gen_bool(0.2) {
@@ -465,7 +422,6 @@ fn read_csv(path: &str, graph1: &mut Graph, graph2: &mut Graph) -> Result<(), Bo
         else {
             graph2.add_student(student, id_count);
         }
-
         //increment id counter
         id_count += 1;
     }
@@ -480,9 +436,7 @@ fn read_csv(path: &str, graph1: &mut Graph, graph2: &mut Graph) -> Result<(), Bo
             //get their ndoe
             let student1 = &graph1.nodes[&ids1[i]];
             let student2 = &graph1.nodes[&ids1[j]];
-
             let weight: u32 = calc_weight(student1, student2);
-
             //if there is a connection (weight > 0) add an edge between both ids
             if weight > 0 {
                 graph1.add_edge(ids1[i], ids1[j], weight);
@@ -500,16 +454,13 @@ fn read_csv(path: &str, graph1: &mut Graph, graph2: &mut Graph) -> Result<(), Bo
             //get their ndoe
             let student1 = &graph2.nodes[&ids2[i]];
             let student2 = &graph2.nodes[&ids2[j]];
-
             let weight: u32 = calc_weight(student1, student2);
-
             //if there is a connection (weight > 0) add an edge between both ids
             if weight > 0 {
                 graph2.add_edge(ids2[i], ids2[j], weight);
             }
         }
     }
-
     Ok(())
 }
 
@@ -518,7 +469,6 @@ fn read_csv(path: &str, graph1: &mut Graph, graph2: &mut Graph) -> Result<(), Bo
 //probably can just be inside read_csv but keeping it as a func in case I need it ever somehow idk
 fn calc_weight(student1: &StudentRecord, student2: &StudentRecord) -> u32 {
     let mut weight: u32 = 0;
-
     if student1.school_type == student2.school_type {
         weight += 1;
     }
@@ -535,22 +485,21 @@ fn calc_weight(student1: &StudentRecord, student2: &StudentRecord) -> u32 {
     if student1.learning_disabilities == "Yes" && student2.learning_disabilities == "Yes" {
         weight += 1;
     }
-
     weight
 }
 
-fn accuracy(test_graph: &Graph, model: DecisionTree<f64, usize>) -> f64 {
+fn accuracy(graph: &Graph, model: DecisionTree<f64, usize>) -> f64 {
     let mut off_by: f64 = 0.0;
-    for (_, student) in &test_graph.nodes {
-        let prediction = test_graph.prediction(model.clone(), student) as f64;
+    let mut actual: f64 = 0.0;
+    for (_, student) in &graph.nodes {
+        let prediction = graph.prediction(&model, student) as f64;
+        actual += student.exam_score as f64;
         let off: f64 = student.exam_score as f64 - prediction;
         //println!("Predicted score: {}, actual score: {}, off by: {}", prediction, student.exam_score, off.abs());
         off_by += off.abs();
     }
-    let test_rows: f64 = test_graph.nodes.len() as f64;
-    let accuracy = (1.0 - (off_by / (test_rows * 100.0))) as f64;
-
-    accuracy
+    //computes error percentage (off_by/actual) and subtracts by 1 to get accuracy
+    return (1.0 - (off_by / actual)) as f64
 }
 
 fn main() {
@@ -559,38 +508,63 @@ fn main() {
 
     let _read_csv = read_csv("StudentPerformanceFactors.csv", &mut train_graph, &mut test_graph);
 
-    //graph.print(5, 5);
+    println!("Printing 1 nodes and 1 edges:");
+    train_graph.print(1, 1);
+
+    println!("\n\n\n\n\n\n");
 
     /* DEGREE CENTRALITY */
     let centrality: HashMap<&usize, i32> = train_graph.degree_centrality();
     println!("Degree centrality:");
     println!("{:?}", centrality);
+    let mut temp: f64 = 0.0;
+    for (_, x) in &centrality { temp += *x as f64; }
+    println!("Average degree centrality is: {}\n
+    There is a total of {} nodes in the graph, meaning that, on average, each node is connected to {:.2}% of all nodes",
+    temp / (centrality.len() as f64), train_graph.nodes.len(), (temp / (centrality.len() as f64)) / (train_graph.nodes.len() as f64) * 100.0);
 
-    
+    println!("\n\n\n\n\n\n");
+
     /* CLUSTER NODES */
     let clusters = train_graph.clusters(3, Some(vec!["school_type", "family_income"]));
     println!("Clusters of nodes:");
     println!("{:?}", clusters);
+    println!("There are {} clusters", clusters.len());
     
-
+    /* 
     //this is done since I can't just do a numbered node since only 20% come through, it would fail 20% of the time
     for (id, _) in &train_graph.nodes {
         println!("The shortest path to all nodes from {} is {:?}", *id, &train_graph.shortest_path(*id));
         break
-    }
+    } */
 
     println!("\n\n\n\n\n\n");
 
-    /* CLOSENESS CENTRALITY 
+    /* CLOSENESS CENTRALITY */
     let close_cent = train_graph.closeness_centrality();
     println!("Closeness centrality:");
-    println!("{:?}", close_cent); */
+    println!("{:?}", close_cent);
+    let mut temp: f64 = 0.0;
+    for (_, x) in &close_cent { temp += x; }
+    println!("Average degree centrality is: {}", temp / (close_cent.len() as f64));
+    
+    println!("\n\n\n\n\n\n");
+    let model = train_graph.decision_tree().expect("Model training error");
 
-    let model = train_graph.decision_tree();
+    println!("Testing the model on 5 students");
+    let mut counter = 0;
+    for (id, student) in &test_graph.nodes {
+        if counter < 5 {
+            let score = test_graph.prediction(&model, &student);
+            println!("The predicted score for student {} with the following traits:
+            {:?}\nis {}, while their actual score is {}", id, student, score, student.exam_score);
+            counter += 1;
+        }
+    }
 
-    let accuracy = accuracy(&test_graph, model.expect("REASON")) * 100.0;
+    println!("\n\n\n\n\n\n");
+    let accuracy = accuracy(&test_graph, model) * 100.0;
     println!("The model has an accuracy of: {:.2}%", accuracy);
-
 }
 
 //tests
@@ -599,9 +573,61 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
-    //tests shortest path
     #[test]
-    fn test_shortest_path() {
+    fn test_graph_new() {
+        let graph = Graph::new();
+        assert_eq!(graph.nodes.len(), 0);
+        assert_eq!(graph.adjacency_list.len(), 0);
+    }
+
+    //degree centrality test
+    #[test]
+    fn test_degree_centrality() {
+        let mut graph = Graph::new();
+        //same students each function
+        let student1 = StudentRecord {
+            school_type: "Public".to_string(),
+            family_income: "High".to_string(),
+            motivation_level: "High".to_string(),
+            peer_influence: "Positive".to_string(),
+            learning_disabilities: "No".to_string(),
+            ..Default::default()
+        };
+
+        let student2 = StudentRecord {
+            school_type: "Private".to_string(),
+            family_income: "Medium".to_string(),
+            motivation_level: "Medium".to_string(),
+            peer_influence: "Negative".to_string(),
+            learning_disabilities: "No".to_string(),
+            ..Default::default()
+        };
+
+        let student3 = StudentRecord {
+            school_type: "Public".to_string(),
+            family_income: "Low".to_string(),
+            motivation_level: "Low".to_string(),
+            peer_influence: "Positive".to_string(),
+            learning_disabilities: "Yes".to_string(),
+            ..Default::default()
+        };
+        graph.add_student(student1, 1);
+        graph.add_student(student2, 2);
+        graph.add_student(student3, 3);
+
+        graph.add_edge(1,2,1);
+        graph.add_edge(2, 3, 1);
+
+        let centrality = graph.degree_centrality();
+
+        assert_eq!(centrality.get(&1), Some(&1));
+        assert_eq!(centrality.get(&2), Some(&2));
+        assert_eq!(centrality.get(&3), Some(&1));
+    }
+
+    //tests closeness centrality
+    #[test]
+    fn test_closeness_centrality() {
         let mut graph = Graph::new();
 
         let student1 = StudentRecord {
@@ -630,19 +656,60 @@ mod tests {
             learning_disabilities: "Yes".to_string(),
             ..Default::default()
         };
-
         graph.add_student(student1, 1);
         graph.add_student(student2, 2);
         graph.add_student(student3, 3);
 
+        graph.add_edge(1,2,1);
+        graph.add_edge(2, 3, 1);
+
+        let closeness_cent = graph.closeness_centrality();
+
+        assert!(closeness_cent.get(&1).unwrap() < closeness_cent.get(&2).unwrap());
+        assert_eq!(*closeness_cent.get(&3).unwrap(), 1.0/3.0);
+        assert!(closeness_cent.get(&2).unwrap() > closeness_cent.get(&3).unwrap());
+    }
+
+    //tests shortest path to ensure it works
+    #[test]
+    fn test_shortest_path() {
+        let mut graph = Graph::new();
+
+        //same students each funct
+        let student1 = StudentRecord {
+            school_type: "Public".to_string(),
+            family_income: "High".to_string(),
+            motivation_level: "High".to_string(),
+            peer_influence: "Positive".to_string(),
+            learning_disabilities: "No".to_string(),
+            ..Default::default()
+        };
+
+        let student2 = StudentRecord {
+            school_type: "Private".to_string(),
+            family_income: "Medium".to_string(),
+            motivation_level: "Medium".to_string(),
+            peer_influence: "Negative".to_string(),
+            learning_disabilities: "No".to_string(),
+            ..Default::default()
+        };
+
+        let student3 = StudentRecord {
+            school_type: "Public".to_string(),
+            family_income: "Low".to_string(),
+            motivation_level: "Low".to_string(),
+            peer_influence: "Positive".to_string(),
+            learning_disabilities: "Yes".to_string(),
+            ..Default::default()
+        };
+        graph.add_student(student1, 1);
+        graph.add_student(student2, 2);
+        graph.add_student(student3, 3);
         graph.add_edge(1, 2, 1);
         graph.add_edge(2, 3, 1);
         graph.add_edge(3, 3, 2);
 
         let dists = graph.shortest_path(1);
-
-        println!("{:?}", dists);
-
         let expected_dists: HashMap<usize, u32> = HashMap::from([(1, 0), (2, 1), (3, 2),]);
 
         for (id, &expected_dists) in expected_dists.iter() {
